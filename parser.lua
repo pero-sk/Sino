@@ -139,7 +139,10 @@ function Parser:parse_decl()
   elseif tok.kind == TokenKind.KW_LET or tok.kind == TokenKind.KW_CONST then
     return self:parse_var_decl()
   elseif tok.kind == TokenKind.KW_FUNC then
-    return self:parse_func_decl(false)
+    if self:peek(1) and self:peek(1).kind == TokenKind.LPAREN then
+      return self:parse_statement()
+    end
+  return self:parse_func_decl(false)
   elseif tok.kind == TokenKind.KW_IMPORT then
     return self:parse_import_decl()
   elseif tok.kind == TokenKind.KW_LUA then
