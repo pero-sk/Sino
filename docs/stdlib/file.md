@@ -5,7 +5,7 @@ File utilities for reading, writing, and checking files.
 Import:
 
 ```sin
-import FileIO from "sino.io"
+import FileIO from "sino.file"
 ```
 
 ## FileIO:read_file(path)
