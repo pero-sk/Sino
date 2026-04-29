@@ -29,3 +29,5 @@ function ConsoleIO.__methods.clear(self)
     os.execute("clear")
   end
 end
+
+return ConsoleIO
