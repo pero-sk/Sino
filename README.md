@@ -148,6 +148,9 @@ John
         print("hello from lua")
     end
 
+    @allow(RefCursing)
+    let x = {__ref=true,value=...}
+
 # Standard Library
 
 Modules include:
