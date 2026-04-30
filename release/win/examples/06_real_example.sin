@@ -1,0 +1,12 @@
+import Arr from "sino.array"
+
+let numbers = {5, 10, 15, 20}
+
+let sum = 0
+
+numbers
+|> Arr:each(func(n) do
+    sum = sum + n
+end)
+
+print("Sum:", sum)

@@ -1,0 +1,4 @@
+let {name, age} = {name="Sam", age=30}
+
+print(name)
+print(age)

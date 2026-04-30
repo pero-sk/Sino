@@ -1,0 +1,17 @@
+class Person
+    field name
+    field age
+
+    func Self:new(name, age)
+        self.name = name
+        self.age = age
+    end
+
+    func greet()
+        return "Hi, I'm " .. self.name
+    end
+end
+
+let p = Person("Alex", 25)
+
+print(p:greet())

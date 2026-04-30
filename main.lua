@@ -1,21 +1,3 @@
-
-local clean_arg = 0
-local silent_arg = 0
-for i = 2, #arg do
-  local value = arg[i]
-  if value:match("^%-%-clean") then
-    clean_arg = i
-  elseif value == "--silent" then
-    silent_arg = i
-  end
-end
-
-local silent = arg[silent_arg] == "--silent"
-
-if not silent then
-  print("main started")
-end
-
 --
 -- findself
 --
@@ -27,9 +9,21 @@ end
 local function current_script_dir()
   local source = debug.getinfo(1, "S").source
 
+  -- Normal Lua script mode:
+  -- lua main.lua ...
   if source:sub(1, 1) == "@" then
     local path = normalize_path(source:sub(2))
     return path:match("^(.*)/") or "."
+  end
+
+  -- Bundled executable mode:
+  -- sino.exe ...
+  if arg and arg[0] then
+    local path = normalize_path(arg[0])
+    local dir = path:match("^(.*)/")
+    if dir then
+      return dir
+    end
   end
 
   return "."
@@ -468,28 +462,129 @@ end
 -- args
 --
 
-local path = arg[1]
+--
+-- cli args
+--
 
-if not path then
-  print("usage: lua main.lua <file.sin>")
-  print("       lua main.lua <file.sin> --progress")
-  print("       lua main.lua <file.sin> --clean")
-  print("       lua main.lua <file.sin> --clean=lua,ast,tokens")
+local function print_usage()
+  print([[
+Sino - modern syntax for Lua
+
+Usage:
+  sino <file.sin>
+  sino build <file.sin> [--progress] [--silent]
+  sino run <file.sin> [--silent]
+  sino clean <file.sin> [--silent]
+  sino clean <file.sin> --clean=lua,ast,tokens,runtime
+
+Options:
+  --progress              Write .tokens and .ast debug files
+  --silent                Suppress normal output
+  --clean                 Remove lua, ast, tokens, and runtime output
+  --clean=<targets>       Remove selected outputs
+                           targets: lua, ast, tokens, runtime, all
+
+Examples:
+  sino hello.sin
+  sino build hello.sin
+  sino run hello.sin
+  sino clean hello.sin
+  sino clean hello.sin --clean=lua,tokens
+]])
+end
+
+local function has_arg(name)
+  for i = 1, #arg do
+    if arg[i] == name then
+      return true
+    end
+  end
+  return false
+end
+
+local function find_clean_arg()
+  for i = 1, #arg do
+    local value = arg[i]
+    if value == "--clean" or value:match("^%-%-clean=") then
+      return value
+    end
+  end
+  return nil
+end
+
+local function find_first_sin_arg(start_index)
+  for i = start_index or 1, #arg do
+    local value = arg[i]
+    if value and value:match("%.sin$") then
+      return value
+    end
+  end
+  return nil
+end
+
+local command = arg[1]
+
+if not command or command == "--help" or command == "-h" then
+  print_usage()
+  os.exit(command and 0 or 1)
+end
+
+local silent = has_arg("--silent")
+local progress = has_arg("--progress")
+
+if not silent then
+  -- print("main started")
+end
+
+local mode
+local path
+
+if command == "build" then
+  mode = "build"
+  path = find_first_sin_arg(2)
+
+elseif command == "run" then
+  mode = "run"
+  path = find_first_sin_arg(2)
+
+elseif command == "clean" then
+  mode = "clean"
+  path = find_first_sin_arg(2)
+
+elseif command:match("%.sin$") then
+  -- Backward-compatible:
+  --   sino file.sin
+  mode = "build"
+  path = command
+
+elseif command == "version" or command == "--version" or command == "-v" then
+  print("Sino 0.1.2")
+  os.exit(0)
+
+else
+  io.stderr:write("unknown command: " .. tostring(command) .. "\n\n")
+  print_usage()
   os.exit(1)
 end
 
-if path == "--help" or path == "-h" then
-  print("usage: lua main.lua <file.sin>")
-  os.exit(0)
+if not path then
+  io.stderr:write("missing input file\n\n")
+  print_usage()
+  os.exit(1)
 end
 
 if not path:match("%.sin$") then
-  error("input file must end with .sin")
+  io.stderr:write("input file must end with .sin\n")
+  os.exit(1)
 end
 
-local clean = parse_clean_arg(arg[clean_arg])
+if path:match("main%.sin$") then
+  io.stderr:write("warning: it is recommended not to name your entry file 'main.sin'\n")
+end
 
-if clean then
+if mode == "clean" then
+  local clean = parse_clean_arg(find_clean_arg() or "--clean")
+
   local files = collect_imports(path, {}, {})
   local root_dir = dirname(path)
 
@@ -536,10 +631,23 @@ if clean then
   os.exit(0)
 end
 
-if path:match("main%.sin$") then
-  print("warning: it is recommended not to name your entry file 'main.sin'")
+local out_file = compile_file(path, compiler_dir, {}, progress)
+
+if not silent then
+  print("compiled:", out_file)
 end
 
-local progress = arg[2] == "--progress"
+if mode == "run" then
+  if not silent then
+    print("running:", out_file)
+  end
 
-compile_file(path, compiler_dir, {}, progress)
+  local lua_cmd = os.getenv("SINO_LUA") or "lua"
+  local cmd = lua_cmd .. ' "' .. out_file .. '"'
+
+  local ok = os.execute(cmd)
+
+  if ok ~= true and ok ~= 0 then
+    os.exit(1)
+  end
+end

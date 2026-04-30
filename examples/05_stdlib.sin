@@ -1,0 +1,14 @@
+import Str from "sino.string"
+import Iter from "sino.iterable"
+import Arr from "sino.array"
+
+let data = {a=1, b=2}
+
+data
+|> Iter:pairs()
+|> Arr:each(func(v, i) do
+    "{K} = {V}" |> Str:template({
+        K = Iter:key(v),
+        V = Iter:value(v)
+    }) |> print()
+end)

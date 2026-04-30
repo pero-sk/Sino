@@ -1,0 +1,4 @@
+let name = "Sino"
+let version = 1
+
+print("Hello from " .. name .. " v" .. version)
