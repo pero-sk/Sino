@@ -217,7 +217,7 @@ function Parser:parse_field_decl()
   local type_annotation = nil
 
   if self:check(TokenKind.COLON) then
-    type_annotation = self:parse_type_annotation()
+    type_annotation = self:parse_type_name("expected type annotation after ':' in field declaration")
   end
 
   local default_value = nil
@@ -391,6 +391,11 @@ function Parser:parse_func_decl()
   local params = self:parse_param_list()
   self:expect(TokenKind.RPAREN, "expected ')' after parameter list")
 
+  local return_type = nil
+  if self:match(TokenKind.ARROW) then
+    return_type = self:parse_type_name("expected return type after '=>'")
+  end
+
   local body = {}
   while not self:check(TokenKind.KW_END) and not self:is_at_end() do
     body[#body + 1] = self:parse_statement()
@@ -405,10 +410,37 @@ function Parser:parse_func_decl()
     params = params,
     body = body,
     isStatic = receiver_kind == "self_class",
+    return_type = return_type,
     receiverKind = receiver_kind,
     start = span.start,
     finish = span.finish,
   })
+end
+
+function Parser:parse_type_name(message)
+  local tok = self:current()
+
+  if tok and tok.kind == TokenKind.IDENT then
+    self:advance()
+    return node("TypeAnnotation", {
+      name = tok.lexeme,
+      nameToken = tok,
+      start = tok.start,
+      finish = tok.finish,
+    })
+  end
+
+  if tok and tok.kind == TokenKind.SELF then
+    self:advance()
+    return node("TypeAnnotation", {
+      name = "Self",
+      nameToken = tok,
+      start = tok.start,
+      finish = tok.finish,
+    })
+  end
+
+  self:error_here(message or "expected type name", tok)
 end
 
 function Parser:parse_import_decl()
@@ -441,7 +473,7 @@ function Parser:parse_param_list()
     local type_annotation = nil
 
     if self:check(TokenKind.COLON) then
-      type_annotation = self:parse_type_annotation()
+      type_annotation = self:parse_type_name("expected type annotation after ':' in parameter declaration")
     end
 
     params[#params + 1] = node("Param", {
@@ -463,7 +495,7 @@ function Parser:parse_var_decl()
   local type_annotation = nil
 
   if self:check(TokenKind.COLON) then
-    type_annotation = self:parse_type_annotation()
+    type_annotation = self:parse_type_name("expected type annotation after ':' in variable declaration")
   end
 
   local is_ref = false
@@ -492,18 +524,6 @@ function Parser:parse_var_decl()
     init = init,
     start = span.start,
     finish = span.finish,
-  })
-end
-
-function Parser:parse_type_annotation()
-  local colon_tok = self:expect(TokenKind.COLON, "expected ':' before type annotation")
-  local name_tok = self:expect_ident("expected type name after ':'")
-
-  return node("TypeAnnotation", {
-    name = name_tok.lexeme,
-    nameToken = name_tok,
-    start = colon_tok.start,
-    finish = name_tok.finish,
   })
 end
 
