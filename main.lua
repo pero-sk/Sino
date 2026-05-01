@@ -103,6 +103,22 @@ local function split_lines(source)
   return lines
 end
 
+local function indent_block(source)
+  source = source:gsub("\r\n", "\n")
+
+  local out = {}
+
+  for line in (source .. "\n"):gmatch("(.-)\n") do
+    if line == "" then
+      out[#out + 1] = ""
+    else
+      out[#out + 1] = "  " .. line
+    end
+  end
+
+  return table.concat(out, "\n")
+end
+
 local function print_source_error(err, fallback_file)
   local filename = err.filename or fallback_file or "<unknown>"
   local line = err.start and err.start.line or 1
@@ -195,6 +211,73 @@ local function copy_runtime_files(out_dir, compiler_dir, used_runtime)
   end
 end
 
+local function compact_lua_module(local_name, module_path, compiler_dir)
+  local stdlib_dir = join_path(compiler_dir, "stdlib")
+
+  local runtime_name = module_path:match("^sino%.(.+)$")
+  local source_path
+
+  if runtime_name then
+    source_path = join_path(stdlib_dir, runtime_name .. ".lua")
+  else
+    error("compact mode can only inline stdlib modules for now: " .. module_path)
+  end
+
+  if not file_exists(source_path) then
+    error("cannot compact missing module: " .. module_path)
+  end
+
+  local source = read_file(source_path)
+  source = source:gsub("\r\n", "\n")
+
+  local returned = source:match("return%s+([%w_]+)%s*$")
+
+  if not returned then
+    error("cannot compact module without final 'return X': " .. module_path)
+  end
+
+  source = source:gsub("%s*return%s+[%w_]+%s*$", "")
+
+  return table.concat({
+    "local " .. local_name .. " = (function()",
+    indent_block(source),
+    "  return " .. returned,
+    "end)()",
+  }, "\n")
+end
+
+local function compact_source(lua_source, ast, used_runtime, compiler_dir)
+  local chunks = {}
+
+  if used_runtime and used_runtime.keyhelper then
+    chunks[#chunks + 1] = compact_lua_module("__sino", "sino.keyhelper", compiler_dir)
+  end
+
+  for _, stmt in ipairs(ast.body or {}) do
+    if stmt.kind == "ImportDecl" then
+      chunks[#chunks + 1] = compact_lua_module(
+        stmt.name,
+        stmt.resolvedRequire or stmt.path,
+        compiler_dir
+      )
+    end
+  end
+
+  lua_source = lua_source:gsub('local __sino = require%("sino%.keyhelper"%)%s*\n?', "")
+
+  for _, stmt in ipairs(ast.body or {}) do
+    if stmt.kind == "ImportDecl" then
+      local require_path = stmt.resolvedRequire or stmt.path
+      local pattern = 'local%s+' .. stmt.name .. '%s+=%s+require%("' .. require_path:gsub("%.", "%%.") .. '"%)%s*\n?'
+      lua_source = lua_source:gsub(pattern, "")
+    end
+  end
+
+  chunks[#chunks + 1] = lua_source
+
+  return table.concat(chunks, "\n\n")
+end
+
 local function format_ast(node, depth)
   depth = depth or 0
   local lines = {}
@@ -256,7 +339,7 @@ local resolve_imports
 -- compile
 --
 
-compile_file = function(path, compiler_dir, seen, progress)
+compile_file = function(path, compiler_dir, seen, progress, compact)
   seen = seen or {}
 
   if seen[path] then
@@ -306,7 +389,7 @@ compile_file = function(path, compiler_dir, seen, progress)
   local out_file = path:gsub("%.sin$", ".lua")
   local out_dir = dirname(out_file)
 
-  resolve_imports(ast, path, out_dir, compiler_dir, seen)
+  resolve_imports(ast, path, out_dir, compiler_dir, seen, progress, compact)
   
   local Codegen = codegen_mod.Codegen
   local result = { run_phase("codegen", path, function()
@@ -315,14 +398,19 @@ compile_file = function(path, compiler_dir, seen, progress)
 
   local lua_source = result[1]
   local used_runtime = result[2]
+  
+  if compact then
+    lua_source = compact_source(lua_source, ast, used_runtime, compiler_dir)
+  else
+    copy_runtime_files(out_dir, compiler_dir, used_runtime)
+  end
 
-  copy_runtime_files(out_dir, compiler_dir, used_runtime)
   write_file(out_file, lua_source)
 
   return out_file
 end
 
-resolve_imports = function(ast, current_file, out_dir, compiler_dir, seen)
+resolve_imports = function(ast, current_file, out_dir, compiler_dir, seen, progress, compact)
   local current_dir = dirname(current_file)
   local stdlib_dir = join_path(compiler_dir, "stdlib")
 
@@ -349,7 +437,7 @@ resolve_imports = function(ast, current_file, out_dir, compiler_dir, seen)
         local std_path = join_path(stdlib_dir, import_path .. ".lua")
 
         if file_exists(sin_path) then
-          compile_file(sin_path, compiler_dir, seen)
+          compile_file(sin_path, compiler_dir, seen, progress, compact)
           stmt.resolvedRequire = import_path
 
         elseif file_exists(lua_path) then
@@ -531,9 +619,11 @@ end
 
 local silent = has_arg("--silent")
 local progress = has_arg("--progress")
+local compact = has_arg("--compact")
+
 
 if not silent then
-  -- print("main started")
+  print("sino started")
 end
 
 local mode
@@ -637,7 +727,7 @@ if mode == "clean" then
   os.exit(0)
 end
 
-local out_file = compile_file(path, compiler_dir, {}, progress)
+local out_file = compile_file(path, compiler_dir, {}, progress, compact)
 
 if not silent then
   print("compiled:", out_file)
