@@ -30,7 +30,6 @@ Sino improves that with:
 - ref types
 - compound assignment
 - directives
-- raw Lua escape blocks
 - standard library helpers
 
 All while staying compatible with the Lua ecosystem.
