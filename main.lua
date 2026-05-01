@@ -1,3 +1,5 @@
+local SINO_VERSION = "0.1.5"
+
 --
 -- findself
 --
@@ -648,7 +650,7 @@ elseif command:match("%.sin$") then
   path = command
 
 elseif command == "version" or command == "--version" or command == "-v" then
-  print("Sino 0.1.5")
+  print("Sino " .. SINO_VERSION)
   os.exit(0)
 
 else
