@@ -585,6 +585,12 @@ end
 if mode == "clean" then
   local clean = parse_clean_arg(find_clean_arg() or "--clean")
 
+  if not clean then
+    io.stderr:write("invalid clean argument\n")
+    print_usage()
+    os.exit(1)
+  end
+
   local files = collect_imports(path, {}, {})
   local root_dir = dirname(path)
 
