@@ -3,31 +3,31 @@ Str.__name = "Str"
 Str.__class = Str
 Str.__fields = {
 }
-Str.__methods = {}
+Str.__methods = {__static = {} }
 
 
 -- "hello" => "HELLO"
-function Str.__methods.upper(self, x)
+function Str.__methods.__static.upper(self, x)
   return string.upper(tostring(x))
 end
 
 -- "Hello" => "hello"
-function Str.__methods.lower(self, x)
+function Str.__methods.__static.lower(self, x)
   return string.lower(tostring(x))
 end
 
 -- "hello world" => 11
-function Str.__methods.len(self, x)
+function Str.__methods.__static.len(self, x)
   return #tostring(x)
 end
 
 -- "  hello world " => "hello world"
-function Str.__methods.trim(self, x)
+function Str.__methods.__static.trim(self, x)
   return tostring(x):match("^%s*(.-)%s*$")
 end
 
 -- {1, 2, 3, 4}, " - " => "1 - 2 - 3 - 4"
-function Str.__methods.join(self, x, sep)
+function Str.__methods.__static.join(self, x, sep)
   sep = sep or ""
 
   local out = {}
@@ -40,7 +40,7 @@ function Str.__methods.join(self, x, sep)
 end
 
 -- "a,b,c", "," => {"a", "b", "c"}
-function Str.__methods.split(self, s, sep)
+function Str.__methods.__static.split(self, s, sep)
   s = tostring(s)
   sep = sep or ""
 
@@ -72,7 +72,7 @@ end
 
 -- let name = "John"
 -- "hello {name}", {name = name} => "hello John"
-function Str.__methods.template(self, s, vars)
+function Str.__methods.__static.template(self, s, vars)
   vars = vars or {}
 
   return (s:gsub("{(.-)}", function(key)

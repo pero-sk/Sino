@@ -2,14 +2,14 @@ local ConsoleIO = {}
 ConsoleIO.__name = "ConsoleIO"
 ConsoleIO.__class = ConsoleIO
 ConsoleIO.__fields = {}
-ConsoleIO.__methods = {}
+ConsoleIO.__methods = {__static= {} }
 
-function ConsoleIO.__methods.input(self, prompt)
+function ConsoleIO.__methods.__static.input(self, prompt)
   io.write(prompt)
   return io.read()
 end
 
-function ConsoleIO.__methods.number(self, prompt)
+function ConsoleIO.__methods.__static.number(self, prompt)
   while true do
     local input = self:input(prompt)
     local number = tonumber(input)
@@ -22,7 +22,7 @@ function ConsoleIO.__methods.number(self, prompt)
   end
 end
 
-function ConsoleIO.__methods.clear(self)
+function ConsoleIO.__methods.__static.clear(self)
   if package.config:sub(1, 1) == "\\" then
     os.execute("cls")
   else
