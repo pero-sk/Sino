@@ -644,8 +644,6 @@ elseif command == "clean" then
   path = find_first_sin_arg(2)
 
 elseif command:match("%.sin$") then
-  -- Backward-compatible:
-  --   sino file.sin
   mode = "build"
   path = command
 
