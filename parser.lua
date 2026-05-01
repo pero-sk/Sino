@@ -217,6 +217,7 @@ function Parser:parse_field_decl()
   local type_annotation = nil
 
   if self:check(TokenKind.COLON) then
+    self:advance()
     type_annotation = self:parse_type_name("expected type annotation after ':' in field declaration")
   end
 
@@ -410,7 +411,7 @@ function Parser:parse_func_decl()
     params = params,
     body = body,
     isStatic = receiver_kind == "self_class",
-    return_type = return_type,
+    returnType = return_type,
     receiverKind = receiver_kind,
     start = span.start,
     finish = span.finish,
@@ -473,6 +474,7 @@ function Parser:parse_param_list()
     local type_annotation = nil
 
     if self:check(TokenKind.COLON) then
+      self:advance()
       type_annotation = self:parse_type_name("expected type annotation after ':' in parameter declaration")
     end
 
@@ -495,6 +497,7 @@ function Parser:parse_var_decl()
   local type_annotation = nil
 
   if self:check(TokenKind.COLON) then
+    self:advance()
     type_annotation = self:parse_type_name("expected type annotation after ':' in variable declaration")
   end
 

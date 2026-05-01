@@ -237,14 +237,25 @@ function Codegen:gen_class_fields_metadata(class)
 end
 
 function Codegen:gen_class_method(class, method)
+  local previous_method = self.current_method
+  self.current_method = method
+
   local class_name = class.name
 
   local params, prologue = self:gen_param_list_with_prologue(method.params)
 
-  if params ~= "" then
-    params = "self, " .. params
+  local receiver_param
+
+  if method.receiverKind == "self_class" and method.name ~= "new" then
+    receiver_param = "Self"
   else
-    params = "self"
+    receiver_param = "self"
+  end
+
+  if params ~= "" then
+    params = receiver_param .. ", " .. params
+  else
+    params = receiver_param
   end
 
   local method_table = class_name .. ".__methods"
@@ -263,6 +274,8 @@ function Codegen:gen_class_method(class, method)
   self:pop_indent()
 
   self:emit("end")
+
+  self.current_method = previous_method
 end
 
 function Codegen:gen_meta_method(class, method)
@@ -581,6 +594,12 @@ function Codegen:gen_expr(expr)
   elseif expr.kind == "SelfExpr" then
     if not self.current_class then
       error("Self used outside of class")
+    end
+
+    if self.current_method
+        and self.current_method.receiverKind == "self_class"
+        and self.current_method.name ~= "new" then
+      return "Self"
     end
 
     return self.current_class.name
