@@ -1,3 +1,5 @@
+local TokenKind = require("lexer").TokenKind
+
 local Validator = {}
 Validator.__index = Validator
 
@@ -31,9 +33,52 @@ local INTERNAL_FIELDS = {
   __ref = true,
 }
 
+local BUILTIN_TYPES = {
+  any = true,
+  int = true,
+  number = true,
+  string = true,
+  bool = true,
+  _nil = true,
+}
+
+local function type_name(t)
+  if not t then
+    return "unknown"
+  end
+  return t.name or tostring(t)
+end
+
+local function make_type(name)
+  return { name = name or "unknown" }
+end
+
+local function is_assignable(expected, actual)
+  expected = expected and expected.name or "unknown"
+  actual = actual and actual.name or "unknown"
+
+  if expected == "any" then
+    return true
+  end
+
+  if actual == "unknown" then
+    return true -- do not error yet
+  end
+
+  if expected == actual then
+    return true
+  end
+
+  if expected == "number" and actual == "int" then
+    return true
+  end
+
+  return false
+end
+
 local function source_error(kind, node, filename, message)
   error({
-    kind = kind or "CompileError",
+    kind = kind or "SafetyError",
     filename = filename,
     start = node and node.start or { line = 1, column = 1 },
     finish = node and node.finish,
@@ -50,6 +95,7 @@ local function new(filename)
     scopes = { {} },
   }, Validator)
 end
+
 
 function Validator:has(permission)
   return self.allows[permission] == true
@@ -68,10 +114,158 @@ function Validator:declare(name, info)
     return
   end
 
-  self.scopes[#self.scopes][name] = info or {
-    deprecated = false,
-    message = nil,
+  info = info or {}
+
+  self.scopes[#self.scopes][name] = {
+    deprecated = info.deprecated == true,
+    message = info.message,
+    type = info.type or make_type("unknown"),
+    kind = info.kind,
   }
+end
+
+function Validator:type_from_annotation(ann)
+  if not ann then
+    return make_type("unknown")
+  end
+
+  local name = ann.name
+
+  if BUILTIN_TYPES[name] then
+    return make_type(name)
+  end
+
+  -- Allow class/user-defined types if already declared.
+  if self:resolve(name) then
+    return make_type(name)
+  end
+
+  source_error(
+    "SafetyError",
+    ann,
+    self.filename,
+    "unknown type '" .. tostring(name) .. "'"
+  )
+end
+
+function Validator:infer_expr_type(expr)
+  if not expr then
+    return make_type("unknown")
+  end
+
+  if expr.kind == "Literal" then
+    local v = expr.value
+
+    if type(v) == "number" then
+      if math.type and math.type(v) == "integer" then
+        return make_type("int")
+      end
+      return make_type("number")
+    end
+
+    if type(v) == "string" then
+      return make_type("string")
+    end
+
+    if type(v) == "boolean" then
+      return make_type("bool")
+    end
+
+    if v == nil then
+      return make_type("nil")
+    end
+  end
+
+  if expr.kind == "Identifier" then
+    local resolved = self:resolve(expr.name)
+    return resolved and resolved.type or make_type("unknown")
+  end
+
+  if expr.kind == "BinaryExpr" then
+    local left = self:infer_expr_type(expr.left)
+    local right = self:infer_expr_type(expr.right)
+
+    local op = expr.op
+
+    if op == TokenKind.PLUS
+        or op == TokenKind.MINUS
+        or op == TokenKind.STAR
+        or op == TokenKind.SLASH
+        or op == TokenKind.PERCENT
+        or op == TokenKind.CARET then
+      if left.name ~= "unknown" and left.name ~= "int" and left.name ~= "number" then
+        source_error("SafetyError", expr.left, self.filename, "left operand must be number, got " .. type_name(left))
+      end
+
+      if right.name ~= "unknown" and right.name ~= "int" and right.name ~= "number" then
+        source_error("SafetyError", expr.right, self.filename, "right operand must be number, got " .. type_name(right))
+      end
+
+      if op == TokenKind.SLASH then
+        return make_type("number")
+      end
+
+      if left.name == "number" or right.name == "number" then
+        return make_type("number")
+      end
+
+      return make_type("int")
+    end
+
+    if op == TokenKind.EQ
+        or op == TokenKind.NE
+        or op == TokenKind.LT
+        or op == TokenKind.LTE
+        or op == TokenKind.GT
+        or op == TokenKind.GTE
+        or op == TokenKind.KW_AND
+        or op == TokenKind.KW_OR then
+      return make_type("bool")
+    end
+
+    if op == TokenKind.CONCAT then
+      return make_type("string")
+    end
+  end
+
+  if expr.kind == "GroupExpr" then
+    return self:infer_expr_type(expr.expression)
+  end
+
+  if expr.kind == "UnaryExpr" then
+    if expr.op == TokenKind.MINUS then
+      local inner = self:infer_expr_type(expr.expression)
+
+      if inner.name ~= "unknown" and inner.name ~= "int" and inner.name ~= "number" then
+        source_error("SafetyError", expr, self.filename, "unary '-' expects number, got " .. type_name(inner))
+      end
+
+      return inner
+    end
+
+    if expr.op == TokenKind.KW_NOT then
+      return make_type("bool")
+    end
+  end
+
+  if expr.kind == "CallExpr" then
+    if expr.callee.kind == "Identifier" then
+      local resolved = self:resolve(expr.callee.name)
+
+      -- Constructor call: Person(...)
+      if resolved and resolved.kind == "class" then
+        return make_type(expr.callee.name)
+      end
+    end
+
+    return make_type("unknown")
+  end
+
+  if expr.kind == "TableLiteral" then
+    return make_type("table")
+  end
+
+  return make_type("unknown")
 end
 
 function Validator:resolve(name)
@@ -124,7 +318,7 @@ function Validator:validate_program(ast)
   if #self.pendingDirectives > 0 then
     local dir = self.pendingDirectives[#self.pendingDirectives]
     source_error(
-      "CompileError",
+      "SafetyError",
       dir,
       self.filename,
       "directive @" .. tostring(dir.name) .. " must be placed before a declaration"
@@ -140,7 +334,7 @@ function Validator:validate_stmt(stmt)
   if stmt.kind == "LuaBlockStmt" then
     if not self:has("RawLua") then
       source_error(
-        "CompileError",
+        "SafetyError",
         stmt,
         self.filename,
         "raw Lua blocks require @allow(RawLua)"
@@ -160,7 +354,7 @@ function Validator:attach_pending_directives(stmt)
   if not ATTACHABLE_DECLS[stmt.kind] then
     local dir = self.pendingDirectives[#self.pendingDirectives]
     source_error(
-      "CompileError",
+      "SafetyError",
       dir,
       self.filename,
       "directive @" .. tostring(dir.name) .. " must be placed before a declaration"
@@ -179,7 +373,7 @@ end
 function Validator:validate_debug_script(stmt)
   if not DIRECTIVES[stmt.name] then
     source_error(
-      "CompileError",
+      "SafetyError",
       stmt,
       self.filename,
       "unknown directive '@" .. tostring(stmt.name) .. "'"
@@ -198,7 +392,7 @@ end
 function Validator:validate_allow_directive(stmt)
   if #stmt.args ~= 1 then
     source_error(
-      "CompileError",
+      "SafetyError",
       stmt,
       self.filename,
       "@allow expects exactly one permission"
@@ -209,7 +403,7 @@ function Validator:validate_allow_directive(stmt)
 
   if arg.kind ~= "Identifier" then
     source_error(
-      "CompileError",
+      "SafetyError",
       arg,
       self.filename,
       "argument to @allow must be an identifier"
@@ -220,7 +414,7 @@ function Validator:validate_allow_directive(stmt)
 
   if not ALLOWED_PERMISSIONS[permission] then
     source_error(
-      "CompileError",
+      "SafetyError",
       arg,
       self.filename,
       "unknown debug script permission '" .. tostring(permission) .. "'"
@@ -233,7 +427,7 @@ end
 function Validator:validate_deprecated_directive(stmt)
   if #stmt.args ~= 1 then
     source_error(
-      "CompileError",
+      "SafetyError",
       stmt,
       self.filename,
       "@deprecated expects exactly one message string"
@@ -244,7 +438,7 @@ function Validator:validate_deprecated_directive(stmt)
 
   if arg.kind ~= "Literal" or type(arg.value) ~= "string" then
     source_error(
-      "CompileError",
+      "SafetyError",
       arg,
       self.filename,
       "argument to @deprecated must be a string"
@@ -291,7 +485,10 @@ function Validator:validate_node(node)
   end
 
   if node.kind == "ClassDecl" then
-    self:declare(node.name, self:info_from_directives(node))
+    local info = self:info_from_directives(node)
+    info.type = make_type("type")
+    info.kind = "class"
+    self:declare(node.name, info)
 
     self:push_scope()
 
@@ -306,8 +503,24 @@ function Validator:validate_node(node)
   if node.kind == "VarDecl" then
     self:validate_node(node.init)
 
+    local explicit_type = self:type_from_annotation(node.typeAnnotation)
+    local init_type = self:infer_expr_type(node.init)
+
+    if node.typeAnnotation and not is_assignable(explicit_type, init_type) then
+      source_error(
+        "SafetyError",
+        node,
+        self.filename,
+        "cannot assign " .. type_name(init_type) .. " to variable of type " .. type_name(explicit_type)
+      )
+    end
+
+    local declared_type = node.typeAnnotation and explicit_type or init_type
+
     if node.name then
-      self:declare(node.name, self:info_from_directives(node))
+      local info = self:info_from_directives(node)
+      info.type = declared_type
+      self:declare(node.name, info)
     end
 
     return
@@ -346,7 +559,7 @@ end
 function Validator:validate_identifier(node)
   if INTERNAL_NAMES[node.name] and not self:has("Internal") then
     source_error(
-      "CompileError",
+      "SafetyError",
       node,
       self.filename,
       "identifier '" .. node.name .. "' is reserved; use @allow(Internal)"
@@ -366,7 +579,7 @@ end
 function Validator:validate_member_expr(node)
   if INTERNAL_FIELDS[node.name] and not self:has("Internal") then
     source_error(
-      "CompileError",
+      "SafetyError",
       node,
       self.filename,
       "field '" .. node.name .. "' is reserved; use @allow(Internal)"
@@ -381,7 +594,7 @@ function Validator:validate_table_literal(node)
         and not self:has("RefCursing")
     then
       source_error(
-        "CompileError",
+        "SafetyError",
         entry,
         self.filename,
         "manual ref layout requires @allow(RefCursing)"

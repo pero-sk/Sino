@@ -175,7 +175,7 @@ function Codegen:gen_class_decl(class)
   self:emit(class_name .. ".__name = " .. quote_string(class_name))
   self:emit(class_name .. ".__class = " .. class_name)
   self:gen_class_fields_metadata(class)
-  self:emit(class_name .. ".__methods = {}")
+  self:emit(class_name .. ".__methods = {__static={}}")
 
   if base_name then
     self:emit(class_name .. ".__super = " .. base_name)
@@ -239,24 +239,21 @@ end
 function Codegen:gen_class_method(class, method)
   local class_name = class.name
 
-  local prologue = {}
+  local params, prologue = self:gen_param_list_with_prologue(method.params)
+
+  if params ~= "" then
+    params = "self, " .. params
+  else
+    params = "self"
+  end
+
+  local method_table = class_name .. ".__methods"
 
   if method.isStatic then
-    local params, r = self:gen_param_list_with_prologue(method.params)
-    prologue = r
-    self:emit("function " .. class_name .. "." .. method.name .. "(" .. params .. ")")
-  else
-    local params, r = self:gen_param_list_with_prologue(method.params)
-    prologue = r
-
-    if params ~= "" then
-      params = "self, " .. params
-    else
-      params = "self"
-    end
-
-    self:emit("function " .. class_name .. ".__methods." .. method.name .. "(" .. params .. ")")
+    method_table = method_table .. ".__static"
   end
+
+  self:emit("function " .. method_table .. "." .. method.name .. "(" .. params .. ")")
 
   self:push_indent()
   for _, line in ipairs(prologue) do
@@ -264,6 +261,7 @@ function Codegen:gen_class_method(class, method)
   end
   self:gen_statements(method.body or {})
   self:pop_indent()
+
   self:emit("end")
 end
 
@@ -304,7 +302,7 @@ function Codegen:gen_class_call_ctor(class, constructor)
   self:emit(class_name .. ".__init_fields(self)")
 
   if constructor then
-    self:emit(class_name .. ".__methods.new(self, ...)")
+    self:emit(class_name .. ".__methods.__static.new(self, ...)")
   elseif base_name then
     self:emit('local base_new = __sino.get_method(' .. base_name .. ', "new")')
     self:emit("base_new(self, ...)")

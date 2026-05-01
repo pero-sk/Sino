@@ -142,7 +142,7 @@ function Parser:parse_decl()
     if self:peek(1) and self:peek(1).kind == TokenKind.LPAREN then
       return self:parse_statement()
     end
-  return self:parse_func_decl(false)
+  return self:parse_func_decl()
   elseif tok.kind == TokenKind.KW_IMPORT then
     return self:parse_import_decl()
   elseif tok.kind == TokenKind.KW_LUA then
@@ -197,20 +197,15 @@ end
 
 function Parser:parse_class_member()
   local tok = self:current()
+
   if not tok then
     self:error_here("unexpected end of input in class body")
   end
 
   if tok.kind == TokenKind.KW_FIELD then
     return self:parse_field_decl()
-  elseif tok.kind == TokenKind.KW_STATIC then
-    self:advance()
-    self:expect(TokenKind.KW_FUNC, "expected 'func' after 'static'")
-    return self:parse_func_decl(true)
   elseif tok.kind == TokenKind.KW_FUNC then
-    return self:parse_func_decl(false)
-  elseif tok.kind == TokenKind.KW_META then
-    return self:parse_meta_decl()
+    return self:parse_func_decl()
   end
 
   self:error_here("unexpected token in class body: " .. tok.kind, tok)
@@ -219,6 +214,12 @@ end
 function Parser:parse_field_decl()
   local field_tok = self:expect(TokenKind.KW_FIELD)
   local name_tok = self:expect_ident("expected field name")
+  local type_annotation = nil
+
+  if self:check(TokenKind.COLON) then
+    type_annotation = self:parse_type_annotation()
+  end
+
   local default_value = nil
 
   if self:match(TokenKind.ASSIGN) then
@@ -372,7 +373,7 @@ function Parser:parse_export_decl()
   })
 end
 
-function Parser:parse_func_decl(is_static)
+function Parser:parse_func_decl()
   local func_tok = self:expect(TokenKind.KW_FUNC, "expected 'func'")
   local receiver_kind = "instance"
   local name_tok
@@ -403,34 +404,8 @@ function Parser:parse_func_decl(is_static)
     nameToken = name_tok,
     params = params,
     body = body,
-    isStatic = is_static,
+    isStatic = receiver_kind == "self_class",
     receiverKind = receiver_kind,
-    start = span.start,
-    finish = span.finish,
-  })
-end
-
-function Parser:parse_meta_decl()
-  local meta_tok = self:expect(TokenKind.KW_META)
-  local name_tok = self:expect_ident("expected metamethod name")
-
-  self:expect(TokenKind.LPAREN, "expected '(' after metamethod name")
-  local params = self:parse_param_list()
-  self:expect(TokenKind.RPAREN, "expected ')' after parameter list")
-
-  local body = {}
-  while not self:check(TokenKind.KW_END) and not self:is_at_end() do
-    body[#body + 1] = self:parse_statement()
-  end
-
-  local end_tok = self:expect(TokenKind.KW_END, "expected 'end' to close metamethod")
-  local span = token_span(meta_tok, end_tok)
-
-  return node("MetaDecl", {
-    name = name_tok.lexeme,
-    nameToken = name_tok,
-    params = params,
-    body = body,
     start = span.start,
     finish = span.finish,
   })
@@ -463,13 +438,19 @@ function Parser:parse_param_list()
 
   repeat
     local pattern = self:parse_pattern()
+    local type_annotation = nil
+
+    if self:check(TokenKind.COLON) then
+      type_annotation = self:parse_type_annotation()
+    end
 
     params[#params + 1] = node("Param", {
       name = pattern.kind == "IdentifierPattern" and pattern.name or nil,
       token = pattern.token,
       pattern = pattern,
+      typeAnnotation = type_annotation,
       start = pattern.start,
-      finish = pattern.finish,
+      finish = type_annotation and type_annotation.finish or pattern.finish,
     })
   until not self:match(TokenKind.COMMA)
 
@@ -479,6 +460,11 @@ end
 function Parser:parse_var_decl()
   local kind_tok = self:advance()
   local pattern = self:parse_pattern()
+  local type_annotation = nil
+
+  if self:check(TokenKind.COLON) then
+    type_annotation = self:parse_type_annotation()
+  end
 
   local is_ref = false
 
@@ -497,6 +483,7 @@ function Parser:parse_var_decl()
     declKind = kind_tok.kind == TokenKind.KW_CONST and "const" or "let",
     isRef = is_ref,
     pattern = pattern,
+    typeAnnotation = type_annotation,
 
     -- backward compatibility
     name = pattern.kind == "IdentifierPattern" and pattern.name or nil,
@@ -505,6 +492,18 @@ function Parser:parse_var_decl()
     init = init,
     start = span.start,
     finish = span.finish,
+  })
+end
+
+function Parser:parse_type_annotation()
+  local colon_tok = self:expect(TokenKind.COLON, "expected ':' before type annotation")
+  local name_tok = self:expect_ident("expected type name after ':'")
+
+  return node("TypeAnnotation", {
+    name = name_tok.lexeme,
+    nameToken = name_tok,
+    start = colon_tok.start,
+    finish = name_tok.finish,
   })
 end
 
