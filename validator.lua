@@ -14,6 +14,10 @@ local ALLOWED_PERMISSIONS = {
   RawLua = true,
 }
 
+local INTERNAL_MODULES = {
+  ["sino.keyhelper"] = true,
+}
+
 local ATTACHABLE_DECLS = {
   ClassDecl = true,
   MethodDecl = true,
@@ -613,6 +617,15 @@ function Validator:validate_node(node)
   end
 
   if node.kind == "ImportDecl" then
+    if INTERNAL_MODULES[node.path] and not self:has("Internal") then
+      source_error(
+        "SafetyError",
+        node,
+        self.filename,
+        "module '" .. node.path .. "' is internal; use @allow(Internal)"
+      )
+    end
+
     local info = self:info_from_directives(node)
     info.kind = "import"
     info.type = make_type("unknown")
