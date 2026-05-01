@@ -2,7 +2,7 @@ local Tson = {}
 Tson.__name = "Tson"
 Tson.__class = Tson
 Tson.__fields = {}
-Tson.__methods = {}
+Tson.__methods = {__static = {} }
 
 Tson.__fields.sort = {
   __fields = {
@@ -90,12 +90,12 @@ local function stringify_value(value, sort_mode)
   end
 end
 
-function Tson.__methods.stringify(self, x, sort_mode)
+function Tson.__methods.__static.stringify(self, x, sort_mode)
   sort_mode = sort_mode or Tson.__fields.sort.NONE
   return stringify_value(x, sort_mode)
 end
 
-function Tson.__methods.stringify_pretty(self, x, indent, sort_mode)
+function Tson.__methods.__static.stringify_pretty(self, x, indent, sort_mode)
   indent = indent or 2
   sort_mode = sort_mode or Tson.__fields.sort.NONE
 
@@ -159,7 +159,7 @@ function Tson.__methods.stringify_pretty(self, x, indent, sort_mode)
   return render(x, 0)
 end
 
-function Tson.__methods.parse(self, s)
+function Tson.__methods.__static.parse(self, s)
   local i = 1
 
   local function skip()

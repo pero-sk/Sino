@@ -2,37 +2,37 @@ local Math = {}
 Math.__name = "Math"
 Math.__class = Math
 Math.__fields = {}
-Math.__methods = {}
+Math.__methods = {__static = {} }
 
-function Math.__methods.abs(self, x)
+function Math.__methods.__static.abs(self, x)
   return math.abs(x)
 end
 
-function Math.__methods.sqrt(self, x)
+function Math.__methods.__static.sqrt(self, x)
   return math.sqrt(x)
 end
 
-function Math.__methods.pow(self, x, y)
+function Math.__methods.__static.pow(self, x, y)
   return x ^ y
 end
 
-function Math.__methods.max(self, x, y)
+function Math.__methods.__static.max(self, x, y)
   return math.max(x, y)
 end
 
-function Math.__methods.min(self, x, y)
+function Math.__methods.__static.min(self, x, y)
   return math.min(x, y)
 end
 
-function Math.__methods.floor(self, x)
+function Math.__methods.__static.floor(self, x)
   return math.floor(x)
 end
 
-function Math.__methods.ceil(self, x)
+function Math.__methods.__static.ceil(self, x)
   return math.ceil(x)
 end
 
-function Math.__methods.round(self, x)
+function Math.__methods.__static.round(self, x)
   if x >= 0 then
     return math.floor(x + 0.5)
   else
@@ -40,11 +40,11 @@ function Math.__methods.round(self, x)
   end
 end
 
-function Math.__methods.clamp(self, x, min, max)
+function Math.__methods.__static.clamp(self, x, min, max)
   return math.max(min, math.min(max, x))
 end
 
-function Math.__methods.sign(self, x)
+function Math.__methods.__static.sign(self, x)
   if x > 0 then
     return 1
   elseif x < 0 then
@@ -54,35 +54,35 @@ function Math.__methods.sign(self, x)
   end
 end
 
-function Math.__methods.sin(self, x)
+function Math.__methods.__static.sin(self, x)
   return math.sin(x)
 end
 
-function Math.__methods.cos(self, x)
+function Math.__methods.__static.cos(self, x)
   return math.cos(x)
 end
 
-function Math.__methods.tan(self, x)
+function Math.__methods.__static.tan(self, x)
   return math.tan(x)
 end
 
-function Math.__methods.asin(self, x)
+function Math.__methods.__static.asin(self, x)
   return math.asin(x)
 end
 
-function Math.__methods.acos(self, x)
+function Math.__methods.__static.acos(self, x)
   return math.acos(x)
 end
 
-function Math.__methods.atan(self, x)
+function Math.__methods.__static.atan(self, x)
   return math.atan(x)
 end
 
-function Math.__methods.atan2(self, y, x)
+function Math.__methods.__static.atan2(self, y, x)
   return math.atan(y, x)
 end
 
-function Math.__methods.random(self, min, max)
+function Math.__methods.__static.random(self, min, max)
   if min and max then
     return math.random(min, max)
   elseif min then
@@ -92,7 +92,7 @@ function Math.__methods.random(self, min, max)
   end
 end
 
-function Math.__methods.lerp(self, a, b, t)
+function Math.__methods.__static.lerp(self, a, b, t)
   return a + (b - a) * t
 end
 

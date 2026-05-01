@@ -2,7 +2,7 @@ local Types = {}
 Types.__name = "Types"
 Types.__class = Types
 Types.__fields = {}
-Types.__methods = {}
+Types.__methods = {__static = {} }
 
 local function is_array(t)
   if type(t) ~= "table" then
@@ -26,7 +26,7 @@ local function is_array(t)
   return count == max_key
 end
 
-function Types.__methods.of(self, x)
+function Types.__methods.__static.of(self, x)
   local t = type(x)
 
   if t ~= "table" then
@@ -60,7 +60,7 @@ function Types.__methods.of(self, x)
   return "object"
 end
 
-function Types.__methods.name(self, x)
+function Types.__methods.__static.name(self, x)
   if type(x) == "table" then
     if x.__name then
       return x.__name
@@ -74,31 +74,31 @@ function Types.__methods.name(self, x)
   return type(x)
 end
 
-function Types.__methods.is(self, x, expected)
-  return Types.__methods.of(self, x) == expected
+function Types.__methods.__static.is(self, x, expected)
+  return Types.__methods.__static.of(self, x) == expected
 end
 
-function Types.__methods.is_array(self, x)
-  return Types.__methods.of(self, x) == "array"
+function Types.__methods.__static.is_array(self, x)
+  return Types.__methods.__static.of(self, x) == "array"
 end
 
-function Types.__methods.is_object(self, x)
-  return Types.__methods.of(self, x) == "object"
+function Types.__methods.__static.is_object(self, x)
+  return Types.__methods.__static.of(self, x) == "object"
 end
 
-function Types.__methods.is_ref(self, x)
-  return Types.__methods.of(self, x) == "ref"
+function Types.__methods.__static.is_ref(self, x)
+  return Types.__methods.__static.of(self, x) == "ref"
 end
 
-function Types.__methods.is_class(self, x)
-  return Types.__methods.of(self, x) == "class"
+function Types.__methods.__static.is_class(self, x)
+  return Types.__methods.__static.of(self, x) == "class"
 end
 
-function Types.__methods.is_instance(self, x)
-  return Types.__methods.of(self, x) == "instance"
+function Types.__methods.__static.is_instance(self, x)
+  return Types.__methods.__static.of(self, x) == "instance"
 end
 
-function Types.__methods.string(self, x)
+function Types.__methods.__static.string(self, x)
   if x == nil then
     return "nil"
   end
@@ -106,11 +106,11 @@ function Types.__methods.string(self, x)
   return tostring(x)
 end
 
-function Types.__methods.number(self, x)
+function Types.__methods.__static.number(self, x)
   return tonumber(x)
 end
 
-function Types.__methods.boolean(self, x)
+function Types.__methods.__static.boolean(self, x)
   if x == nil then
     return false
   end
@@ -138,7 +138,7 @@ function Types.__methods.boolean(self, x)
   return true
 end
 
-function Types.__methods.raw(self, x)
+function Types.__methods.__static.raw(self, x)
   if type(x) == "table" and x.__fields then
     return x.__fields
   end
@@ -146,7 +146,7 @@ function Types.__methods.raw(self, x)
   return x
 end
 
-function Types.__methods.instanceof(self, x, class)
+function Types.__methods.__static.instanceof(self, x, class)
   if type(x) ~= "table" then
     return false
   end

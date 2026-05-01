@@ -2,9 +2,9 @@ local FileIO = {}
 FileIO.__name = "FileIO"
 FileIO.__class = FileIO
 FileIO.__fields = {}
-FileIO.__methods = {}
+FileIO.__methods = {__static = {} }
 
-function FileIO.__methods.read_file(self, path)
+function FileIO.__methods.__static.read_file(self, path)
   local file = io.open(path, "r")
 
   if not file then
@@ -17,7 +17,7 @@ function FileIO.__methods.read_file(self, path)
   return content
 end
 
-function FileIO.__methods.write_file(self, path, content)
+function FileIO.__methods.__static.write_file(self, path, content)
   local file = io.open(path, "w")
 
   if not file then
@@ -28,7 +28,7 @@ function FileIO.__methods.write_file(self, path, content)
   file:close()
 end
 
-function FileIO.__methods.create_file(self, path)
+function FileIO.__methods.__static.create_file(self, path)
     local file = io.open(path, "w")
     if not file then
         error("cannot create file: " .. path)
@@ -36,7 +36,7 @@ function FileIO.__methods.create_file(self, path)
     file:close()
 end
 
-function FileIO.__methods.file_exists(self, path)
+function FileIO.__methods.__static.file_exists(self, path)
   local file = io.open(path, "r")
 
   if file then

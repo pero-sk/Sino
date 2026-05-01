@@ -2,42 +2,42 @@ local Arr = {}
 Arr.__name = "Arr"
 Arr.__class = Arr
 Arr.__fields = {}
-Arr.__methods = {}
+Arr.__methods = {__static = {}}
 
-function Arr.__methods.len(self, xs)
+function Arr.__methods.__static.len(self, xs)
   return #xs
 end
 
-function Arr.__methods.at(self, xs, index)
+function Arr.__methods.__static.at(self, xs, index)
   return xs[index]
 end
 
-function Arr.__methods.push(self, xs, value)
+function Arr.__methods.__static.push(self, xs, value)
   xs[#xs + 1] = value
   return xs
 end
 
-function Arr.__methods.pop(self, xs)
+function Arr.__methods.__static.pop(self, xs)
   local value = xs[#xs]
   xs[#xs] = nil
   return value
 end
 
-function Arr.__methods.first(self, xs)
+function Arr.__methods.__static.first(self, xs)
   return xs[1]
 end
 
-function Arr.__methods.last(self, xs)
+function Arr.__methods.__static.last(self, xs)
   return xs[#xs]
 end
 
-function Arr.__methods.join(self, xs, sep)
+function Arr.__methods.__static.join(self, xs, sep)
   return table.concat(xs, sep or "")
 end
 
 -- lambda array methods
 
-function Arr.__methods.map(self, xs, fn)
+function Arr.__methods.__static.map(self, xs, fn)
   local out = {}
 
   for i, value in ipairs(xs) do
@@ -47,7 +47,7 @@ function Arr.__methods.map(self, xs, fn)
   return out
 end
 
-function Arr.__methods.filter(self, xs, fn)
+function Arr.__methods.__static.filter(self, xs, fn)
   local out = {}
 
   for i, value in ipairs(xs) do
@@ -59,7 +59,7 @@ function Arr.__methods.filter(self, xs, fn)
   return out
 end
 
-function Arr.__methods.each(self, xs, fn)
+function Arr.__methods.__static.each(self, xs, fn)
   local source = xs.__fields or xs
 
   for idx, value in ipairs(source) do
@@ -69,7 +69,7 @@ function Arr.__methods.each(self, xs, fn)
   return xs
 end
 
-function Arr.__methods.find(self, xs, fn)
+function Arr.__methods.__static.find(self, xs, fn)
   for i, value in ipairs(xs) do
     if fn(value, i) then
       return value
@@ -79,7 +79,7 @@ function Arr.__methods.find(self, xs, fn)
   return nil
 end
 
-function Arr.__methods.reduce(self, xs, fn, initial)
+function Arr.__methods.__static.reduce(self, xs, fn, initial)
   local acc = initial
   local start = 1
 
@@ -95,7 +95,7 @@ function Arr.__methods.reduce(self, xs, fn, initial)
   return acc
 end
 
-function Arr.__methods.sort(self, xs, fn)
+function Arr.__methods.__static.sort(self, xs, fn)
   local source = xs.__fields or xs
   local out = {}
 
@@ -112,7 +112,7 @@ function Arr.__methods.sort(self, xs, fn)
   return out
 end
 
-function Arr.__methods.shuffle(self, xs)
+function Arr.__methods.__static.shuffle(self, xs)
   local source = xs.__fields or xs
   local out = {}
 

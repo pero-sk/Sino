@@ -111,6 +111,17 @@ John
         end
     end
 
+### Constructors
+
+class constructors are made using this style
+
+    func Self:X(y) => Self
+
+which `return Self(...)`
+
+the exception to these constructors is the `new` constructor, which is shown above
+
+
 ## Pipe Operator
 
     data

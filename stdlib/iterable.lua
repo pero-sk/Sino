@@ -2,9 +2,9 @@ local Iter = {}
 Iter.__name = "Iter"
 Iter.__class = Iter
 Iter.__fields = {}
-Iter.__methods = {}
+Iter.__methods = {__static = {} }
 
-function Iter.__methods.values(self, xs)
+function Iter.__methods.__static.values(self, xs)
   local out = {}
 
   for _, value in ipairs(xs) do
@@ -14,15 +14,15 @@ function Iter.__methods.values(self, xs)
   return {__fields=out}
 end
 
-function Iter.__methods.value(self, x)
+function Iter.__methods.__static.value(self, x)
   return x.__fields.value
 end
 
-function Iter.__methods.key(self, x)
+function Iter.__methods.__static.key(self, x)
   return x.__fields.key
 end
 
-function Iter.__methods.enumerate(self, xs)
+function Iter.__methods.__static.enumerate(self, xs)
   local out = {}
 
   for index, value in ipairs(xs) do
@@ -37,7 +37,7 @@ function Iter.__methods.enumerate(self, xs)
   return {__fields=out}
 end
 
-function Iter.__methods.pairs(self, obj)
+function Iter.__methods.__static.pairs(self, obj)
   local source = obj.__fields or obj
   local out = {}
 
@@ -53,7 +53,7 @@ function Iter.__methods.pairs(self, obj)
   return { __fields = out }
 end
 
-function Iter.__methods.keys(self, obj)
+function Iter.__methods.__static.keys(self, obj)
   local out = {}
 
   for key, _ in pairs(obj) do
@@ -67,7 +67,7 @@ function Iter.__methods.keys(self, obj)
   return {__fields=out}
 end
 
-function Iter.__methods.range(self, start_value, end_value, step)
+function Iter.__methods.__static.range(self, start_value, end_value, step)
   local out = {}
   step = step or 1
 
