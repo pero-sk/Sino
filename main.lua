@@ -61,6 +61,13 @@ if not ok then
   os.exit(1)
 end
 
+local ok, resolver_mod = pcall(require, "resolver")
+if not ok then
+  print("require failed:")
+  print(resolver_mod)
+  os.exit(1)
+end
+
 local ok, codegen_mod = pcall(require, "codegen")
 if not ok then
   print("require failed:")
@@ -514,6 +521,16 @@ compile_file = function(path, compiler_dir, seen, progress, compact)
     return Validator.validate(ast, path)
   end)
 
+  local env = {
+    modules = {},
+  }
+
+  local Resolver = resolver_mod.Resolver
+
+  run_phase("resolver", path, function()
+    Resolver.resolve(ast, env)
+  end)
+
   local out_file = path:gsub("%.sin$", ".lua")
   local out_dir = dirname(out_file)
   local compact_generated = nil
@@ -556,7 +573,7 @@ compile_file = function(path, compiler_dir, seen, progress, compact)
   return out_file
 end
 
-resolve_imports = function(ast, current_file, out_dir, compiler_dir, seen, progress, compact)
+resolve_imports = function(ast, current_file, out_dir, compiler_dir, env, seen, progress, compact)
   local current_dir = dirname(current_file)
   local stdlib_dir = join_path(compiler_dir, "stdlib")
 

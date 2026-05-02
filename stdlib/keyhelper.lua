@@ -1,8 +1,5 @@
 local helper = {}
 
--- cache so we don't re-expose classes twice
-local exposed = setmetatable({}, { __mode = "k" })
-
 function helper.get_method(target, name)
   local class
 

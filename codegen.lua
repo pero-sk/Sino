@@ -697,7 +697,15 @@ end
 
 function Codegen:gen_method_lookup_expr(expr)
   local base = self:gen_expr(expr.base)
-  return "get(" .. base .. ".__class, " .. quote_string(expr.name) .. ")"
+  local method = expr.name
+
+  -- resolved static path (NO runtime helper)
+  if expr.resolvedStatic then
+    return base .. "." .. method
+  end
+
+  -- fallback dynamic dispatch
+  return "get(" .. base .. ".__class, " .. quote_string(method) .. ")"
 end
 
 function Codegen:gen_lambda_expr(expr)
@@ -800,16 +808,22 @@ function Codegen:gen_call_expr(expr)
     local base = self:gen_expr(expr.callee.base)
     local method = expr.callee.name
 
-    local call_args = { base }
-    for _, arg in ipairs(args) do
-      call_args[#call_args + 1] = arg
+    local args = {}
+
+    -- insert implicit self/receiver
+    args[#args+1] = base
+    for _, arg in ipairs(expr.args or {}) do
+      args[#args+1] = self:gen_expr(arg)
     end
 
-    return "get(" .. base .. ".__class, "
-        .. quote_string(method)
-        .. ")("
-        .. table.concat(call_args, ", ")
-        .. ")"
+    if expr.callee.resolvedStatic then
+      -- Arr.each(Arr, ...)
+      return base .. "." .. method .. "(" .. table.concat(args, ", ") .. ")"
+    end
+
+    -- dynamic dispatch
+    return "get(" .. base .. ".__class, " .. quote_string(method) .. ")("
+      .. table.concat(args, ", ") .. ")"
   end
 
   return self:gen_expr(expr.callee) .. "(" .. table.concat(args, ", ") .. ")"
