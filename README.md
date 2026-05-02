@@ -8,6 +8,22 @@ Write `.sin` files. Compile to `.lua`. Run anywhere Lua runs.
 
 ---
 
+# Installation
+
+### Windows
+
+1. Go to the releases page  
+2. Download `win.zip`  
+3. Extract the archive
+4. Move extracted archive contents to a folder (e.g. `C:\sino`)
+5. Add that folder to your PATH
+
+Verify installation:
+
+```bash
+sino --version
+```
+
 # Why Sino?
 
 Lua is excellent:
