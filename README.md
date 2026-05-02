@@ -2,7 +2,7 @@
 
 Sino is a modern superset of Lua that compiles to plain Lua.
 
-It keeps Lua’s speed, portability, and simplicity while adding cleaner syntax, modern features, and better developer ergonomics.
+Write cleaner, more expressive code with features like classes, destructuring, and pipelines all while keeping Lua’s speed, portability, and simplicity.
 
 Write `.sin` files. Compile to `.lua`. Run anywhere Lua runs.
 
@@ -12,7 +12,7 @@ Write `.sin` files. Compile to `.lua`. Run anywhere Lua runs.
 
 ### Windows
 
-1. Go to the releases page  
+1. Go to the [releases page](https://github.com/pero-sk/Sino/releases)
 2. Download `win.zip`  
 3. Extract the archive
 4. Move extracted archive contents to a folder (e.g. `C:\sino`)

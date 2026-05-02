@@ -94,6 +94,7 @@ function Codegen:gen_program(ast)
   if self.used_runtime.keyhelper then
     self:emit('local __sino = require("sino.keyhelper")')
     self:emit("")
+    self:emit("local get = __sino.get_method")
   end
 
   for i, stmt in ipairs(ast.body or {}) do
@@ -317,7 +318,7 @@ function Codegen:gen_class_call_ctor(class, constructor)
   if constructor then
     self:emit(class_name .. ".__methods.__static.new(self, ...)")
   elseif base_name then
-    self:emit('local base_new = __sino.get_method(' .. base_name .. ', "new")')
+    self:emit('local base_new = get(' .. base_name .. ', "new")')
     self:emit("base_new(self, ...)")
   end
 
@@ -664,7 +665,7 @@ function Codegen:gen_call_expr_with_leading_arg(expr, leading_arg)
       call_args[#call_args + 1] = arg
     end
 
-    return "__sino.get_method(" .. base .. ".__class, "
+    return "get(" .. base .. ".__class, "
         .. quote_string(method)
         .. ")("
         .. table.concat(call_args, ", ")
@@ -684,7 +685,7 @@ end
 
 function Codegen:gen_method_lookup_expr(expr)
   local base = self:gen_expr(expr.base)
-  return "__sino.get_method(" .. base .. ".__class, " .. quote_string(expr.name) .. ")"
+  return "get(" .. base .. ".__class, " .. quote_string(expr.name) .. ")"
 end
 
 function Codegen:gen_lambda_expr(expr)
@@ -792,7 +793,7 @@ function Codegen:gen_call_expr(expr)
       call_args[#call_args + 1] = arg
     end
 
-    return "__sino.get_method(" .. base .. ".__class, "
+    return "get(" .. base .. ".__class, "
         .. quote_string(method)
         .. ")("
         .. table.concat(call_args, ", ")
