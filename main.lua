@@ -275,7 +275,15 @@ local function collect_generated_import_lua(path, seen, out)
   return out
 end
 
-local function compact_lua_module (local_name, module_path, compiler_dir, current_file)
+local function compact_lua_module(local_name, module_path, compiler_dir, current_file, seen)
+  seen = seen or {}
+
+  -- deduplication
+  if seen[module_path] then
+    return nil
+  end
+  seen[module_path] = true
+
   local stdlib_dir = join_path(compiler_dir, "stdlib")
   local current_dir = dirname(current_file)
 
@@ -327,11 +335,15 @@ local function compact_lua_module (local_name, module_path, compiler_dir, curren
 
   local nested_chunks = {}
 
+  -- inline nested requires WITH dedup
   source = source:gsub(
     'local%s+([%w_]+)%s+=%s+require%("([^"]+)"%)%s*\n?',
     function(name, path)
-      nested_chunks[#nested_chunks + 1] =
-        compact_lua_module(name, path, compiler_dir, current_file)
+      local chunk = compact_lua_module(name, path, compiler_dir, current_file, seen)
+
+      if chunk then
+        nested_chunks[#nested_chunks + 1] = chunk
+      end
 
       return ""
     end
@@ -355,28 +367,42 @@ end
 
 local function compact_source(lua_source, ast, used_runtime, compiler_dir, current_file)
   local chunks = {}
+  local seen = {}
 
+  -- inline __sino once
   if used_runtime and used_runtime.keyhelper then
-    chunks[#chunks + 1] =
-      compact_lua_module("__sino", "sino.keyhelper", compiler_dir, current_file)
-  end
+    local chunk =
+      compact_lua_module("__sino", "sino.keyhelper", compiler_dir, current_file, seen)
 
-  for _, stmt in ipairs(ast.body or {}) do
-    if stmt.kind == "ImportDecl" then
-      chunks[#chunks + 1] = compact_lua_module(
-        stmt.name,
-        stmt.resolvedRequire or stmt.path,
-        compiler_dir,
-        current_file
-      )
+    if chunk then
+      chunks[#chunks + 1] = chunk
     end
   end
 
+  -- inline imports (deduplicated)
+  for _, stmt in ipairs(ast.body or {}) do
+    if stmt.kind == "ImportDecl" then
+      local chunk = compact_lua_module(
+        stmt.name,
+        stmt.resolvedRequire or stmt.path,
+        compiler_dir,
+        current_file,
+        seen
+      )
+
+      if chunk then
+        chunks[#chunks + 1] = chunk
+      end
+    end
+  end
+
+  -- remove runtime require
   lua_source = lua_source:gsub(
     'local __sino = require%("sino%.keyhelper"%)%s*\n?',
     ""
   )
 
+  -- remove import requires
   for _, stmt in ipairs(ast.body or {}) do
     if stmt.kind == "ImportDecl" then
       local require_path = stmt.resolvedRequire or stmt.path
@@ -392,6 +418,7 @@ local function compact_source(lua_source, ast, used_runtime, compiler_dir, curre
     end
   end
 
+  -- append main code
   chunks[#chunks + 1] = lua_source
 
   return table.concat(chunks, "\n\n")
