@@ -1,4 +1,4 @@
-local SINO_VERSION = "0.1.5"
+local SINO_VERSION = "0.1.6"
 
 --
 -- findself
@@ -153,7 +153,29 @@ local function print_source_error(err, fallback_file)
   io.stderr:write("     | " .. string.rep(" ", math.max(column - 1, 0)) .. "^\n")
 end
 
+local function run_phase(name, filename, fn)
+  local ok, a, b, c, d = pcall(fn)
+
+  if ok then
+    return a, b, c, d
+  end
+
+  local err = a
+
+  if type(err) == "table" and err.kind then
+    print_source_error(err, filename)
+    os.exit(1)
+  end
+
+  io.stderr:write(name .. " failed: " .. tostring(err) .. "\n")
+  os.exit(1)
+end
+
 local function dirname(path)
+  if not path then
+    return "."
+  end
+
   return path:match("^(.*)[/\\]") or "."
 end
 
@@ -213,16 +235,77 @@ local function copy_runtime_files(out_dir, compiler_dir, used_runtime)
   end
 end
 
-local function compact_lua_module(local_name, module_path, compiler_dir)
-  local stdlib_dir = join_path(compiler_dir, "stdlib")
+local function collect_generated_import_lua(path, seen, out)
+  seen = seen or {}
+  out = out or {}
 
-  local runtime_name = module_path:match("^sino%.(.+)$")
+  if seen[path] then
+    return out
+  end
+
+  seen[path] = true
+
+  local source = read_file(path)
+
+  local Lexer = lexer_mod.Lexer
+  local lexer = Lexer.new(source, path)
+  local tokens = run_phase("lexer", path, function()
+    return lexer:tokenize()
+  end)
+
+  local Parser = parser_mod.Parser
+  local parser = Parser.new(tokens, path, source)
+  local ast = run_phase("parser", path, function()
+    return parser:parse()
+  end)
+
+  local current_dir = dirname(path)
+
+  for _, stmt in ipairs(ast.body or {}) do
+    if stmt.kind == "ImportDecl" and not stmt.path:match("^sino%.") then
+      local sin_path = join_path(current_dir, module_to_path(stmt.path) .. ".sin")
+
+      if file_exists(sin_path) then
+        out[#out + 1] = sin_path:gsub("%.sin$", ".lua")
+        collect_generated_import_lua(sin_path, seen, out)
+      end
+    end
+  end
+
+  return out
+end
+
+local function compact_lua_module (local_name, module_path, compiler_dir, current_file)
+  local stdlib_dir = join_path(compiler_dir, "stdlib")
+  local current_dir = dirname(current_file)
+
   local source_path
 
-  if runtime_name then
+  if module_path:match("^sino%.") then
+    local runtime_name = module_path:match("^sino%.(.+)$")
     source_path = join_path(stdlib_dir, runtime_name .. ".lua")
   else
-    error("compact mode can only inline stdlib modules for now: " .. module_path)
+    local module_fs_path = module_to_path(module_path)
+
+    local local_lua = join_path(current_dir, module_fs_path .. ".lua")
+    local local_sin = join_path(current_dir, module_fs_path .. ".sin")
+    local std_lua = join_path(stdlib_dir, module_path .. ".lua")
+
+    if file_exists(local_lua) then
+      source_path = local_lua
+    elseif file_exists(local_sin) then
+      local compiled_lua = local_sin:gsub("%.sin$", ".lua")
+
+      if not file_exists(compiled_lua) then
+        error("compact mode expected compiled module: " .. compiled_lua)
+      end
+
+      source_path = compiled_lua
+    elseif file_exists(std_lua) then
+      source_path = std_lua
+    else
+      error("cannot compact unresolved module: " .. module_path)
+    end
   end
 
   if not file_exists(source_path) then
@@ -232,27 +315,50 @@ local function compact_lua_module(local_name, module_path, compiler_dir)
   local source = read_file(source_path)
   source = source:gsub("\r\n", "\n")
 
-  local returned = source:match("return%s+([%w_]+)%s*$")
+  local returned =
+    source:match("\n%s*return%s+(.+)%s*$")
+    or source:match("^%s*return%s+(.+)%s*$")
 
   if not returned then
-    error("cannot compact module without final 'return X': " .. module_path)
+    error("cannot compact module without final return: " .. module_path)
   end
 
-  source = source:gsub("%s*return%s+[%w_]+%s*$", "")
+  source = source:gsub("%s*return%s+.+%s*$", "")
 
-  return table.concat({
-    "local " .. local_name .. " = (function()",
-    indent_block(source),
-    "  return " .. returned,
-    "end)()",
-  }, "\n")
+  local nested_chunks = {}
+
+  source = source:gsub(
+    'local%s+([%w_]+)%s+=%s+require%("([^"]+)"%)%s*\n?',
+    function(name, path)
+      nested_chunks[#nested_chunks + 1] =
+        compact_lua_module(name, path, compiler_dir, current_file)
+
+      return ""
+    end
+  )
+
+  local body = {}
+
+  body[#body + 1] = "local " .. local_name .. " = (function()"
+
+  for _, chunk in ipairs(nested_chunks) do
+    body[#body + 1] = indent_block(chunk)
+    body[#body + 1] = ""
+  end
+
+  body[#body + 1] = indent_block(source)
+  body[#body + 1] = "  return " .. returned
+  body[#body + 1] = "end)()"
+
+  return table.concat(body, "\n")
 end
 
-local function compact_source(lua_source, ast, used_runtime, compiler_dir)
+local function compact_source(lua_source, ast, used_runtime, compiler_dir, current_file)
   local chunks = {}
 
   if used_runtime and used_runtime.keyhelper then
-    chunks[#chunks + 1] = compact_lua_module("__sino", "sino.keyhelper", compiler_dir)
+    chunks[#chunks + 1] =
+      compact_lua_module("__sino", "sino.keyhelper", compiler_dir, current_file)
   end
 
   for _, stmt in ipairs(ast.body or {}) do
@@ -260,17 +366,28 @@ local function compact_source(lua_source, ast, used_runtime, compiler_dir)
       chunks[#chunks + 1] = compact_lua_module(
         stmt.name,
         stmt.resolvedRequire or stmt.path,
-        compiler_dir
+        compiler_dir,
+        current_file
       )
     end
   end
 
-  lua_source = lua_source:gsub('local __sino = require%("sino%.keyhelper"%)%s*\n?', "")
+  lua_source = lua_source:gsub(
+    'local __sino = require%("sino%.keyhelper"%)%s*\n?',
+    ""
+  )
 
   for _, stmt in ipairs(ast.body or {}) do
     if stmt.kind == "ImportDecl" then
       local require_path = stmt.resolvedRequire or stmt.path
-      local pattern = 'local%s+' .. stmt.name .. '%s+=%s+require%("' .. require_path:gsub("%.", "%%.") .. '"%)%s*\n?'
+
+      local pattern =
+        'local%s+'
+        .. stmt.name
+        .. '%s+=%s+require%("'
+        .. require_path:gsub("%.", "%%.")
+        .. '"%)%s*\n?'
+
       lua_source = lua_source:gsub(pattern, "")
     end
   end
@@ -310,24 +427,6 @@ local function format_ast(node, depth)
   end
 
   return table.concat(lines, "\n")
-end
-
-local function run_phase(name, filename, fn)
-  local ok, a, b, c, d = pcall(fn)
-
-  if ok then
-    return a, b, c, d
-  end
-
-  local err = a
-
-  if type(err) == "table" and err.kind then
-    print_source_error(err, filename)
-    os.exit(1)
-  end
-
-  io.stderr:write(name .. " failed: " .. tostring(err) .. "\n")
-  os.exit(1)
 end
 
 --
@@ -390,6 +489,12 @@ compile_file = function(path, compiler_dir, seen, progress, compact)
 
   local out_file = path:gsub("%.sin$", ".lua")
   local out_dir = dirname(out_file)
+  local compact_generated = nil
+
+  if compact then
+    compact_generated = collect_generated_import_lua(path, {}, {})
+  end
+
 
   resolve_imports(ast, path, out_dir, compiler_dir, seen, progress, compact)
   
@@ -402,12 +507,24 @@ compile_file = function(path, compiler_dir, seen, progress, compact)
   local used_runtime = result[2]
   
   if compact then
-    lua_source = compact_source(lua_source, ast, used_runtime, compiler_dir)
+    lua_source = compact_source(lua_source, ast, used_runtime, compiler_dir, path)
   else
     copy_runtime_files(out_dir, compiler_dir, used_runtime)
   end
 
   write_file(out_file, lua_source)
+
+  if compact then
+    remove_dir(join_path(out_dir, "sino"))
+
+    if compact_generated then
+      for _, file in ipairs(compact_generated) do
+        if file ~= out_file and file_exists(file) then
+          remove_file(file)
+        end
+      end
+    end
+  end
 
   return out_file
 end
@@ -439,7 +556,7 @@ resolve_imports = function(ast, current_file, out_dir, compiler_dir, seen, progr
         local std_path = join_path(stdlib_dir, import_path .. ".lua")
 
         if file_exists(sin_path) then
-          compile_file(sin_path, compiler_dir, seen, progress, compact)
+          compile_file(sin_path, compiler_dir, seen, progress, false)
           stmt.resolvedRequire = import_path
 
         elseif file_exists(lua_path) then
@@ -561,15 +678,17 @@ local function print_usage()
 Sino - modern syntax for Lua
 
 Usage:
-  sino <file.sin>
-  sino build <file.sin> [--progress] [--silent]
-  sino run <file.sin> [--silent]
+  sino <file.sin> [--compact]
+  sino build <file.sin> [--progress] [--silent] [--compact]
+  sino run <file.sin> [--silent] [--compact]
   sino clean <file.sin> [--silent]
   sino clean <file.sin> --clean=lua,ast,tokens,runtime
+  sino version [--silent]
 
 Options:
   --progress              Write .tokens and .ast debug files
   --silent                Suppress normal output
+  --compact               Inline imported modules into the main output file (removes .lua outputs and runtime directory)
   --clean                 Remove lua, ast, tokens, and runtime output
   --clean=<targets>       Remove selected outputs
                            targets: lua, ast, tokens, runtime, all
@@ -580,6 +699,7 @@ Examples:
   sino run hello.sin
   sino clean hello.sin
   sino clean hello.sin --clean=lua,tokens
+  sino version
 ]])
 end
 
