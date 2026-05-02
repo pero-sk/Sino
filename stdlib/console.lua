@@ -30,4 +30,8 @@ function ConsoleIO.__methods.__static.clear(self)
   end
 end
 
+for k, v in pairs(ConsoleIO.__methods.__static) do
+  ConsoleIO[k] = v
+end
+
 return ConsoleIO

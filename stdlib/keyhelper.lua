@@ -1,24 +1,26 @@
 local helper = {}
 
+-- cache so we don't re-expose classes twice
+local exposed = setmetatable({}, { __mode = "k" })
+
 function helper.get_method(target, name)
   local class
 
-  -- detect class vs instance
   if target.__class == target then
-    -- class
     class = target
     while class do
-      if class.__methods and class.__methods.__static and class.__methods.__static[name] then
-        return class.__methods.__static[name]
+      local static = class.__methods and class.__methods.__static
+      if static and static[name] then
+        return static[name]
       end
       class = class.__super
     end
   else
-    -- instance
     class = target.__class
     while class do
-      if class.__methods and class.__methods[name] then
-        return class.__methods[name]
+      local method = class.__methods and class.__methods[name]
+      if method then
+        return method
       end
       class = class.__super
     end
@@ -28,10 +30,7 @@ function helper.get_method(target, name)
 end
 
 function helper.ref(value)
-  return {
-    __ref = true,
-    value = value,
-  }
+  return { __ref = true, value = value }
 end
 
 return helper

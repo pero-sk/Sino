@@ -47,4 +47,8 @@ function FileIO.__methods.__static.file_exists(self, path)
   end
 end
 
+for k, v in pairs(FileIO.__methods.__static) do
+  FileIO[k] = v
+end
+
 return FileIO

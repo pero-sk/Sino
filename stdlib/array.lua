@@ -128,4 +128,8 @@ function Arr.__methods.__static.shuffle(self, xs)
   return out
 end
 
+for k, v in pairs(Arr.__methods.__static) do
+  Arr[k] = v
+end
+
 return Arr

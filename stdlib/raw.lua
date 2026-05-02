@@ -26,4 +26,8 @@ function Raw.__methods.__static.has(Self, obj, key)
   return obj[key] ~= nil
 end
 
+for k, v in pairs(Raw.__methods.__static) do
+  Raw[k] = v
+end
+
 return Raw

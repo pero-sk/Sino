@@ -278,4 +278,8 @@ function Tson.__methods.__static.parse(self, s)
   return parse_value()
 end
 
+for k, v in pairs(Tson.__methods.__static) do
+  Tson[k] = v
+end
+
 return Tson

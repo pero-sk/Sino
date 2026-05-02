@@ -87,4 +87,8 @@ function Str.__methods.__static.template(self, s, vars)
   end))
 end
 
+for k, v in pairs(Str.__methods.__static) do
+  Str[k] = v
+end
+
 return Str

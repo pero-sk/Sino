@@ -101,4 +101,8 @@ Math.__fields.E = math.exp(1)
 Math.__fields.INFINITY = math.huge
 Math.__fields.NAN = 0 / 0
 
+for k, v in pairs(Math.__methods.__static) do
+  Math[k] = v
+end
+
 return Math

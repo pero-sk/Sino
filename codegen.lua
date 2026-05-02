@@ -105,6 +105,10 @@ function Codegen:gen_program(ast)
   end
 end
 
+function Codegen:is_static_target(expr)
+  return expr.kind == "Identifier"
+end
+
 function Codegen:gen_top_level(stmt)
   if stmt.kind == "ClassDecl" then
     self:gen_class_decl(stmt)
@@ -177,6 +181,8 @@ function Codegen:gen_class_decl(class)
   self:emit(class_name .. ".__class = " .. class_name)
   self:gen_class_fields_metadata(class)
   self:emit(class_name .. ".__methods = {__static={}}")
+
+  self:emit("")
 
   if base_name then
     self:emit(class_name .. ".__super = " .. base_name)
@@ -665,12 +671,18 @@ function Codegen:gen_call_expr_with_leading_arg(expr, leading_arg)
       call_args[#call_args + 1] = arg
     end
 
+    if self:is_static_target(expr.callee.base) then
+      -- direct call
+      return base .. "." .. method .. "(" .. table.concat(call_args, ", ") .. ")"
+    end
+
+    -- fallback
     return "get(" .. base .. ".__class, "
         .. quote_string(method)
         .. ")("
         .. table.concat(call_args, ", ")
         .. ")"
-  end
+      end
 
   return self:gen_expr(expr.callee) .. "(" .. table.concat(args, ", ") .. ")"
 end

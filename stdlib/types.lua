@@ -164,4 +164,8 @@ function Types.__methods.__static.instanceof(self, x, class)
   return false
 end
 
+for k, v in pairs(Types.__methods.__static) do
+  Types[k] = v
+end
+
 return Types

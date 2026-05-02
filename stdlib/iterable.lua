@@ -88,4 +88,8 @@ function Iter.__methods.__static.range(self, start_value, end_value, step)
   return {__fields=out}
 end
 
+for k, v in pairs(Iter.__methods.__static) do
+  Iter[k] = v
+end
+
 return Iter
