@@ -28,6 +28,8 @@ local ATTACHABLE_DECLS = {
 
 local INTERNAL_NAMES = {
   __sino = true,
+  __fields = true,
+  __methods = true
 }
 
 local INTERNAL_FIELDS = {
@@ -35,6 +37,7 @@ local INTERNAL_FIELDS = {
   __methods = true,
   __class = true,
   __ref = true,
+  __arr = true
 }
 
 local BUILTIN_TYPES = {

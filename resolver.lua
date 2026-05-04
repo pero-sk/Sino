@@ -36,6 +36,8 @@ function Resolver:visit(node)
   elseif node.kind == "IfStmt" then
     visit_list(self, node.thenBranch)
     visit_list(self, node.elseBranch)
+  elseif node.kind == "TableFieldEntry" then
+    visit_list(node.keyToken)
   end
 end
 

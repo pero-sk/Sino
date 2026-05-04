@@ -242,6 +242,34 @@ local function copy_runtime_files(out_dir, compiler_dir, used_runtime)
   end
 end
 
+local function unwrap_import_path(expr)
+  if type(expr) == "nil" then
+    return nil
+  end
+
+  -- for k,v in ipairs(expr) do
+  --   print(k, v)
+  -- end
+
+  if type(expr) == "string" then
+    return expr
+  end
+
+  if type(expr) == "table" then
+    if expr.kind == "Literal" then
+      return expr.value or (expr.lastToken and expr.lastToken.value)
+    end
+
+    if expr.kind == "Identifier" then
+      return expr.name
+    end
+
+    error("unsupported import path expression: " .. tostring(expr.kind))
+  end
+
+  error("unsupported import path type: " .. type(expr))
+end
+
 local function collect_generated_import_lua(path, seen, out)
   seen = seen or {}
   out = out or {}
@@ -269,12 +297,15 @@ local function collect_generated_import_lua(path, seen, out)
   local current_dir = dirname(path)
 
   for _, stmt in ipairs(ast.body or {}) do
-    if stmt.kind == "ImportDecl" and not stmt.path:match("^sino%.") then
-      local sin_path = join_path(current_dir, module_to_path(stmt.path) .. ".sin")
+    local path = unwrap_import_path(stmt.path)
+    if path ~= nil then
+      if stmt.kind == "ImportDecl" and not path:match("^sino%.") then
+        local sin_path = join_path(current_dir, module_to_path(stmt.path) .. ".sin")
 
-      if file_exists(sin_path) then
-        out[#out + 1] = sin_path:gsub("%.sin$", ".lua")
-        collect_generated_import_lua(sin_path, seen, out)
+        if file_exists(sin_path) then
+          out[#out + 1] = sin_path:gsub("%.sin$", ".lua")
+          collect_generated_import_lua(sin_path, seen, out)
+        end
       end
     end
   end
@@ -571,34 +602,6 @@ compile_file = function(path, compiler_dir, seen, progress, compact)
   end
 
   return out_file
-end
-
-local function unwrap_import_path(expr)
-  if type(expr) == "nil" then
-    return nil
-  end
-
-  -- for k,v in ipairs(expr) do
-  --   print(k, v)
-  -- end
-
-  if type(expr) == "string" then
-    return expr
-  end
-
-  if type(expr) == "table" then
-    if expr.kind == "Literal" then
-      return expr.value or (expr.lastToken and expr.lastToken.value)
-    end
-
-    if expr.kind == "Identifier" then
-      return expr.name
-    end
-
-    error("unsupported import path expression: " .. tostring(expr.kind))
-  end
-
-  error("unsupported import path type: " .. type(expr))
 end
 
 resolve_imports = function(ast, current_file, out_dir, compiler_dir, env, seen, progress, compact)

@@ -342,6 +342,21 @@ function Codegen:gen_class_call_ctor(class, constructor)
     self:emit("base_new(self, ...)")
   end
 
+  -- normalise
+  self:emit("for k, v in pairs(self.__fields) do")
+  self:push_indent()
+  self:emit("if type(v) == 'table' and (v.__arr == nil or v.__arr ~= true) then")
+  self:push_indent()
+  self:emit("if v.__fields == nil then")
+  self:push_indent()
+  self:emit("self.__fields[k] = { __fields = v }")
+  self:pop_indent()
+  self:emit("end")
+  self:pop_indent()
+  self:emit("end")
+  self:pop_indent()
+  self:emit("end")
+
   self:emit("return self")
   self:pop_indent()
   self:emit("end")
@@ -543,15 +558,11 @@ function Codegen:gen_for_stmt(stmt)
   local iter_name = self:fresh_temp("__iter")
 
   self:emit("local " .. iter_name .. " = " .. iterable)
-
-  -- iterate object fields
-  self:emit("for " .. var .. " in pairs(" .. iter_name .. ") do")
-
+  self:emit("for _, " .. var .. " in ipairs(" .. iter_name .. ".__fields) do")
   self:push_indent()
   self:gen_statements(stmt.body or {})
   self:emit("::__continue::")
   self:pop_indent()
-
   self:emit("end")
 end
 
@@ -659,20 +670,20 @@ function Codegen:gen_expr(expr)
   elseif expr.kind == "PipeExpr" then
     return self:gen_pipe_expr(expr)
   elseif expr.kind == "ArrayLiteral" then
-    return self:getn_array_literal(expr)
+    return self:gen_array_literal(expr)
   else
     error("unsupported expression node: " .. tostring(expr.kind))
   end
 end
 
-function Codegen:getn_array_literal(expr)
+function Codegen:gen_array_literal(expr)
   local parts = {}
 
   for _, element in ipairs(expr.elements or {}) do
     parts[#parts + 1] = self:gen_expr(element)
   end
 
-  return "{" .. table.concat(parts, ", ") .. "}"
+  return "{ __arr=true, " .. table.concat(parts, ", ") .. "}"
 end
 
 function Codegen:gen_pipe_expr(expr)
