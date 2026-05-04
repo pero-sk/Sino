@@ -3,24 +3,25 @@ local helper = {}
 function helper.get_method(target, name)
   local class
 
-  if target.__class == target then
+  -- detect class vs instance
+  if target.__name ~= nil and target.__methods ~= nil then
     class = target
-    while class do
-      local static = class.__methods and class.__methods.__static
-      if static and static[name] then
-        return static[name]
-      end
-      class = class.__super
-    end
   else
     class = target.__class
-    while class do
-      local method = class.__methods and class.__methods[name]
+  end
+
+  while class do
+    -- instance + static unified lookup
+    local methods = class.__methods
+
+    if methods then
+      local method = methods[name] or (methods.__static and methods.__static[name])
       if method then
         return method
       end
-      class = class.__super
     end
+
+    class = class.__super
   end
 
   error("method not found: " .. tostring(name))

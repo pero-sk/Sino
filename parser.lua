@@ -450,15 +450,27 @@ function Parser:parse_import_decl()
 
   self:expect(TokenKind.KW_FROM, "expected 'from' after import name")
 
-  local path_tok = self:expect(TokenKind.STRING, "expected import path string")
+  local path_node
+
+  if self:check(TokenKind.STRING) then
+    local tok = self:expect(TokenKind.STRING, "expected import path string")
+    path_node = node("Literal", {
+      value = tok.literal,
+      firstToken = tok,
+      lastToken = tok,
+      start = tok.start,
+      finish = tok.finish
+    })
+
+  else
+    path_node = self:parse_expression()
+  end
 
   return node("ImportDecl", {
     name = name_tok.lexeme,
-    path = path_tok.value,
-    nameToken = name_tok,
-    pathToken = path_tok,
+    path = path_node,
     start = import_tok.start,
-    finish = path_tok.finish,
+    finish = path_node.finish or name_tok.finish,
   })
 end
 
@@ -602,6 +614,8 @@ function Parser:parse_statement()
     return self:parse_while_statement()
   elseif tok.kind == TokenKind.KW_FOR then
     return self:parse_for_statement()
+  elseif tok.kind == TokenKind.KW_IMPORT then
+    return self:parse_import_decl()
   elseif tok.kind == TokenKind.KW_CONTINUE then
     local continue_tok = self:advance()
     return node("ContinueStmt", {
@@ -1000,6 +1014,26 @@ function Parser:parse_primary_expression()
       start = lparen.start,
       finish = rparen.finish,
     })
+  elseif tok.kind == TokenKind.LBRACKET then
+    -- array literal
+    local lbracket = self:advance()
+    local elements = {}
+
+    if not self:check(TokenKind.RBRACKET) then
+      repeat
+        elements[#elements + 1] = self:parse_expression()
+      until not self:match(TokenKind.COMMA)
+    end
+
+    local rbracket = self:expect(TokenKind.RBRACKET, "expected ']' after array literal")
+
+    return node("ArrayLiteral", {
+      elements = elements,
+      firstToken = lbracket,
+      lastToken = rbracket,
+      start = lbracket.start,
+      finish = rbracket.finish,
+    })
   elseif tok.kind == TokenKind.LBRACE then
     local lbrace = self:advance()
     local entries = {}
@@ -1023,7 +1057,7 @@ function Parser:parse_primary_expression()
         else
           local value = self:parse_expression()
 
-          entries[#entries + 1] = node("TableArrayEntry", {
+          entries[#entries + 1] = node("TableEntry", {
             value = value,
             start = value.start,
             finish = value.finish,

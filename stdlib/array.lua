@@ -60,7 +60,7 @@ function Arr.__methods.__static.filter(self, xs, fn)
 end
 
 function Arr.__methods.__static.each(self, xs, fn)
-  local source = xs.__fields or xs
+  local source = xs
 
   for idx, value in ipairs(source) do
     fn(value, idx)
@@ -96,7 +96,7 @@ function Arr.__methods.__static.reduce(self, xs, fn, initial)
 end
 
 function Arr.__methods.__static.sort(self, xs, fn)
-  local source = xs.__fields or xs
+  local source = xs
   local out = {}
 
   for i, v in ipairs(source) do
@@ -113,7 +113,7 @@ function Arr.__methods.__static.sort(self, xs, fn)
 end
 
 function Arr.__methods.__static.shuffle(self, xs)
-  local source = xs.__fields or xs
+  local source = xs
   local out = {}
 
   for i, v in ipairs(source) do

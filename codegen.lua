@@ -147,13 +147,27 @@ function Codegen:emit_compound_assign(stmt)
 end
 
 function Codegen:gen_import_decl(stmt)
-  local require_path = stmt.resolvedRequire or stmt.path
+  local name = stmt.name
 
+  -- stdlib/runtime hook
   if stmt.runtimeModule then
     self:use_runtime(stmt.runtimeModule)
   end
 
-  self:emit("local " .. stmt.name .. " = require(" .. quote_string(require_path) .. ")")
+  -- STATIC import (preferred path)
+  if stmt.resolvedRequire then
+    self:emit("local " .. name .. " = require(" .. quote_string(stmt.resolvedRequire) .. ")")
+    return
+  end
+
+  -- DYNAMIC import (fallback)
+  if stmt.path then
+    local path_expr = self:gen_expr(stmt.path)
+    self:emit("local " .. name .. " = require(" .. path_expr .. ")")
+    return
+  end
+
+  error("invalid import: missing path")
 end
 
 function Codegen:gen_export_decl(stmt)
@@ -412,7 +426,7 @@ function Codegen:gen_param_list_with_prologue(params)
       local tmp = self:fresh_temp("__param")
       names[#names + 1] = tmp
 
-      prologue[#prologue + 1] = "local " .. tmp .. "_fields = " .. tmp .. ".__fields or " .. tmp
+      prologue[#prologue + 1] = "local " .. tmp .. "_fields = " .. tmp .. ".__fields "
 
       for _, field in ipairs(pattern.fields or {}) do
         prologue[#prologue + 1] =
@@ -456,6 +470,8 @@ function Codegen:gen_statement(stmt)
     self:emit("goto __continue")
   elseif stmt.kind == "BreakStmt" then
     self:emit("break")
+  elseif stmt.kind == "ImportDecl" then
+    self:gen_import_decl(stmt)
   else
     error("unsupported statement node: " .. tostring(stmt.kind))
   end
@@ -491,7 +507,7 @@ function Codegen:gen_var_pattern_decl(stmt)
 
     local tmp = self:fresh_temp("__destructure")
     self:emit("local " .. tmp .. " = " .. self:gen_expr(stmt.init))
-    self:emit(tmp .. " = " .. tmp .. ".__fields or " .. tmp)
+    self:emit(tmp .. " = " .. tmp .. ".__fields")
 
     for _, field in ipairs(stmt.pattern.fields or {}) do
       self:emit("local " .. field.name .. " = " .. tmp .. "." .. field.key)
@@ -527,11 +543,15 @@ function Codegen:gen_for_stmt(stmt)
   local iter_name = self:fresh_temp("__iter")
 
   self:emit("local " .. iter_name .. " = " .. iterable)
-  self:emit("for __index, " .. var .. " in ipairs(" .. iter_name .. ".__fields or " .. iter_name .. ") do")
+
+  -- iterate object fields
+  self:emit("for " .. var .. " in pairs(" .. iter_name .. ") do")
+
   self:push_indent()
   self:gen_statements(stmt.body or {})
   self:emit("::__continue::")
   self:pop_indent()
+
   self:emit("end")
 end
 
@@ -638,9 +658,21 @@ function Codegen:gen_expr(expr)
     return "(" .. self:gen_expr(expr.expression) .. ")"
   elseif expr.kind == "PipeExpr" then
     return self:gen_pipe_expr(expr)
+  elseif expr.kind == "ArrayLiteral" then
+    return self:getn_array_literal(expr)
   else
     error("unsupported expression node: " .. tostring(expr.kind))
   end
+end
+
+function Codegen:getn_array_literal(expr)
+  local parts = {}
+
+  for _, element in ipairs(expr.elements or {}) do
+    parts[#parts + 1] = self:gen_expr(element)
+  end
+
+  return "{" .. table.concat(parts, ", ") .. "}"
 end
 
 function Codegen:gen_pipe_expr(expr)
@@ -787,14 +819,15 @@ function Codegen:gen_table_literal(expr)
   for _, entry in ipairs(expr.entries or {}) do
     if entry.kind == "TableFieldEntry" then
       parts[#parts + 1] = entry.key .. " = " .. self:gen_expr(entry.value)
-    elseif entry.kind == "TableArrayEntry" then
-      parts[#parts + 1] = self:gen_expr(entry.value)
+    elseif entry.kind == "TableEntry" then
+      error("array-style table entries are not supported, use Arrays instead [a,b,c] instead of {a,b,c}")
     else
       error("unsupported table entry: " .. tostring(entry.kind))
     end
   end
 
-  return "{" .. table.concat(parts, ", ") .. "}"
+  -- {} always means it is a sino object so we wrap it with __fields to distinguish from plain Lua tables.
+  return "{ __fields={" .. table.concat(parts, ", ") .. "}}"
 end
 
 function Codegen:gen_call_expr(expr)

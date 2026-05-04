@@ -38,7 +38,7 @@ function Iter.__methods.__static.enumerate(self, xs)
 end
 
 function Iter.__methods.__static.pairs(self, obj)
-  local source = obj.__fields or obj
+  local source = obj.__fields
   local out = {}
 
   for key, value in pairs(source) do
